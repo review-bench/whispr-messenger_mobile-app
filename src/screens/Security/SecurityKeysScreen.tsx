@@ -338,13 +338,21 @@ export const SecurityKeysScreen: React.FC = () => {
   };
 
   const fetchQRChallenge = useCallback(async (): Promise<void> => {
-    if (!currentDeviceId) return;
+    if (!currentDeviceId) {
+      console.warn("[QR] fetchQRChallenge: no currentDeviceId");
+      return;
+    }
+    console.log("[QR] Generating challenge for deviceId:", currentDeviceId);
     setQrLoading(true);
     setQrChallenge(null);
     setQrCountdown(300);
     try {
       const challenge =
         await DeviceManagerService.generateQRChallenge(currentDeviceId);
+      console.log(
+        "[QR] Challenge set, length:",
+        typeof challenge === "string" ? challenge.length : typeof challenge,
+      );
       setQrChallenge(challenge);
     } finally {
       setQrLoading(false);
@@ -356,7 +364,16 @@ export const SecurityKeysScreen: React.FC = () => {
     setShowQRModal(true);
     try {
       await fetchQRChallenge();
-    } catch {
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string; body?: unknown };
+      console.error(
+        "[QR] handleShowQRCode error — status:",
+        e?.status,
+        "message:",
+        e?.message,
+        "body:",
+        JSON.stringify(e?.body),
+      );
       showToast(
         getLocalizedText("security.qrGenerateError") ||
           "Impossible de générer le QR code",
@@ -370,7 +387,16 @@ export const SecurityKeysScreen: React.FC = () => {
     triggerHaptic("light");
     try {
       await fetchQRChallenge();
-    } catch {
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string; body?: unknown };
+      console.error(
+        "[QR] handleRefreshQR error — status:",
+        e?.status,
+        "message:",
+        e?.message,
+        "body:",
+        JSON.stringify(e?.body),
+      );
       showToast(
         getLocalizedText("security.qrGenerateError") ||
           "Impossible de générer le QR code",
