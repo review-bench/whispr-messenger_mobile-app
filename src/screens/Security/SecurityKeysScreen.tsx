@@ -3,7 +3,7 @@
  * Security keys and connected devices management
  */
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import {
   Animated,
   Platform,
   Dimensions,
+  ActivityIndicator,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
@@ -24,6 +25,7 @@ import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
 import * as Haptics from "expo-haptics";
 import Toast from "../../components/Toast/Toast";
+import QRCodeStyled from "react-native-qrcode-styled";
 
 import { copyToClipboard } from "../../utils/clipboard";
 import {
@@ -64,6 +66,8 @@ export const SecurityKeysScreen: React.FC = () => {
   const slideAnim = useRef(new Animated.Value(30)).current;
   const modalScale = useRef(new Animated.Value(0.9)).current;
   const modalOpacity = useRef(new Animated.Value(0)).current;
+  const qrModalScale = useRef(new Animated.Value(0.9)).current;
+  const qrModalOpacity = useRef(new Animated.Value(0)).current;
 
   const [devices, setDevices] = useState<ConnectedDevice[]>([]);
   const [loadingDevices, setLoadingDevices] = useState(true);
@@ -76,6 +80,10 @@ export const SecurityKeysScreen: React.FC = () => {
   );
   const [verificationCode, setVerificationCode] = useState("");
   const [showSecurityKeys, setShowSecurityKeys] = useState(false);
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [qrChallenge, setQrChallenge] = useState<string | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrCountdown, setQrCountdown] = useState(300);
   const [toast, setToast] = useState<{
     visible: boolean;
     message: string;
@@ -94,6 +102,12 @@ export const SecurityKeysScreen: React.FC = () => {
     if (p === "desktop" || p === "macos" || p === "windows" || p === "linux")
       return "desktop";
     return "mobile";
+  };
+
+  const formatCountdown = (seconds: number): string => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
   const formatLastActive = (isoString: string): string => {
@@ -184,6 +198,49 @@ export const SecurityKeysScreen: React.FC = () => {
       ]).start();
     }
   }, [showSecurityCodeModal]);
+
+  useEffect(() => {
+    if (showQRModal) {
+      Animated.parallel([
+        Animated.spring(qrModalScale, {
+          toValue: 1,
+          tension: 50,
+          friction: 7,
+          useNativeDriver: true,
+        }),
+        Animated.timing(qrModalOpacity, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(qrModalScale, {
+          toValue: 0.9,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(qrModalOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [showQRModal]);
+
+  useEffect(() => {
+    if (!showQRModal || !qrChallenge) return;
+    const id = setInterval(() => {
+      setQrCountdown((prev) => (prev <= 1 ? 0 : prev - 1));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [showQRModal, qrChallenge]);
+
+  useEffect(() => {
+    if (qrCountdown === 0 && showQRModal) setQrChallenge(null);
+  }, [qrCountdown, showQRModal]);
 
   const triggerHaptic = (type: "light" | "medium" | "heavy" = "light") => {
     if (Platform.OS === "ios") {
@@ -280,15 +337,47 @@ export const SecurityKeysScreen: React.FC = () => {
     }
   };
 
-  const handleScanQRCode = () => {
+  const fetchQRChallenge = useCallback(async (): Promise<void> => {
+    if (!currentDeviceId) return;
+    setQrLoading(true);
+    setQrChallenge(null);
+    setQrCountdown(300);
+    try {
+      const challenge =
+        await DeviceManagerService.generateQRChallenge(currentDeviceId);
+      setQrChallenge(challenge);
+    } finally {
+      setQrLoading(false);
+    }
+  }, [currentDeviceId]);
+
+  const handleShowQRCode = useCallback(async () => {
     triggerHaptic("light");
-    Alert.alert(
-      "",
-      getLocalizedText("security.qrScannerComingSoon"),
-      [{ text: getLocalizedText("common.ok") }],
-      { cancelable: true },
-    );
-  };
+    setShowQRModal(true);
+    try {
+      await fetchQRChallenge();
+    } catch {
+      showToast(
+        getLocalizedText("security.qrGenerateError") ||
+          "Impossible de générer le QR code",
+        "error",
+      );
+      setShowQRModal(false);
+    }
+  }, [fetchQRChallenge]);
+
+  const handleRefreshQR = useCallback(async () => {
+    triggerHaptic("light");
+    try {
+      await fetchQRChallenge();
+    } catch {
+      showToast(
+        getLocalizedText("security.qrGenerateError") ||
+          "Impossible de générer le QR code",
+        "error",
+      );
+    }
+  }, [fetchQRChallenge]);
 
   const getDeviceIcon = (type: string): { name: any; color: string } => {
     const iconColor = accentColor;
@@ -968,7 +1057,7 @@ export const SecurityKeysScreen: React.FC = () => {
 
           <View style={styles.actionsSection}>
             <TouchableOpacity
-              onPress={handleScanQRCode}
+              onPress={handleShowQRCode}
               activeOpacity={0.9}
               style={styles.actionButtonContainer}
             >
@@ -1195,6 +1284,153 @@ export const SecurityKeysScreen: React.FC = () => {
                   {getLocalizedText("security.verify")}
                 </Text>
               </LinearGradient>
+            </TouchableOpacity>
+          </Animated.View>
+        </Animated.View>
+      </Modal>
+
+      <Modal
+        visible={showQRModal}
+        transparent
+        animationType="none"
+        onRequestClose={() => setShowQRModal(false)}
+      >
+        <Animated.View
+          style={[styles.modalOverlay, { opacity: qrModalOpacity }]}
+        >
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setShowQRModal(false)}
+          />
+          <Animated.View
+            style={[
+              styles.modalContent,
+              {
+                backgroundColor: themeColors.background.primary,
+                transform: [{ scale: qrModalScale }],
+                ...Platform.select({
+                  ios: {
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: -4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 20,
+                  },
+                  android: { elevation: 24 },
+                }),
+              },
+            ]}
+          >
+            <View style={styles.modalHeader}>
+              <Text
+                style={[
+                  styles.modalTitle,
+                  {
+                    color: themeColors.text.primary,
+                    fontSize: getFontSize("xl"),
+                  },
+                ]}
+              >
+                {getLocalizedText("security.scanQRCode")}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowQRModal(false)}
+                style={[
+                  styles.modalCloseButton,
+                  { backgroundColor: themeColors.background.secondary },
+                ]}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="close"
+                  size={20}
+                  color={themeColors.text.primary}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <Text
+              style={[
+                styles.modalSubtitle,
+                {
+                  color: themeColors.text.secondary,
+                  fontSize: getFontSize("sm"),
+                },
+              ]}
+            >
+              {getLocalizedText("security.qrInstructions") ||
+                "Scannez ce code avec l'appareil à connecter"}
+            </Text>
+
+            <View style={styles.qrContainer}>
+              {qrLoading ? (
+                <ActivityIndicator size="large" color={accentColor} />
+              ) : qrChallenge ? (
+                <QRCodeStyled
+                  data={qrChallenge}
+                  style={{ backgroundColor: "#FFFFFF" }}
+                  padding={12}
+                  width={200}
+                />
+              ) : (
+                <View style={styles.qrExpiredContainer}>
+                  <Ionicons
+                    name="time-outline"
+                    size={48}
+                    color={themeColors.text.tertiary}
+                  />
+                  <Text
+                    style={[
+                      styles.qrExpiredText,
+                      {
+                        color: themeColors.text.secondary,
+                        fontSize: getFontSize("sm"),
+                      },
+                    ]}
+                  >
+                    {getLocalizedText("security.qrExpired") || "QR code expiré"}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {qrChallenge && !qrLoading && (
+              <Text
+                style={[
+                  styles.qrCountdownText,
+                  {
+                    color: themeColors.text.secondary,
+                    fontSize: getFontSize("sm"),
+                  },
+                ]}
+              >
+                {getLocalizedText("security.qrExpiresIn") || "Expire dans"}{" "}
+                {formatCountdown(qrCountdown)}
+              </Text>
+            )}
+
+            <TouchableOpacity
+              onPress={handleRefreshQR}
+              disabled={qrLoading}
+              activeOpacity={0.8}
+              style={[
+                styles.qrRefreshButton,
+                {
+                  backgroundColor: accentColor + "15",
+                  borderColor: accentColor + "40",
+                  opacity: qrLoading ? 0.5 : 1,
+                },
+              ]}
+            >
+              <Ionicons name="refresh" size={18} color={accentColor} />
+              <Text
+                style={[
+                  styles.qrRefreshText,
+                  { color: accentColor, fontSize: getFontSize("base") },
+                ]}
+              >
+                {getLocalizedText("security.qrRefresh") || "Actualiser"}
+              </Text>
             </TouchableOpacity>
           </Animated.View>
         </Animated.View>
@@ -1583,6 +1819,40 @@ const styles = StyleSheet.create({
   },
   hideKeysButtonText: {
     fontWeight: "500",
+    letterSpacing: 0.2,
+  },
+  qrContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 224,
+    paddingVertical: 16,
+  },
+  qrExpiredContainer: {
+    alignItems: "center",
+    gap: 12,
+  },
+  qrExpiredText: {
+    fontWeight: "500",
+    textAlign: "center",
+  },
+  qrCountdownText: {
+    textAlign: "center",
+    fontWeight: "500",
+    marginBottom: 20,
+  },
+  qrRefreshButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 8,
+    marginTop: 8,
+  },
+  qrRefreshText: {
+    fontWeight: "600",
     letterSpacing: 0.2,
   },
 });

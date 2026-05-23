@@ -158,6 +158,13 @@ export const DeviceManagerService = {
       method: "DELETE",
     });
   },
+
+  async generateQRChallenge(deviceId: string): Promise<string> {
+    return apiFetch<string>(
+      `/qr-code/challenge/${encodeURIComponent(deviceId)}`,
+      { method: "POST" },
+    );
+  },
 };
 
 // ─── Signal Protocol keys ────────────────────────────────────────────────────
