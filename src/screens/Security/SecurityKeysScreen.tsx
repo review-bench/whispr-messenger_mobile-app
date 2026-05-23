@@ -1321,9 +1321,7 @@ export const SecurityKeysScreen: React.FC = () => {
         animationType="none"
         onRequestClose={() => setShowQRModal(false)}
       >
-        <Animated.View
-          style={[styles.modalOverlay, { opacity: qrModalOpacity }]}
-        >
+        <View style={styles.modalOverlay}>
           <TouchableOpacity
             style={styles.modalBackdrop}
             activeOpacity={1}
@@ -1334,6 +1332,7 @@ export const SecurityKeysScreen: React.FC = () => {
               styles.modalContent,
               {
                 backgroundColor: themeColors.background.primary,
+                opacity: qrModalOpacity,
                 transform: [{ scale: qrModalScale }],
                 ...Platform.select({
                   ios: {
@@ -1459,7 +1458,7 @@ export const SecurityKeysScreen: React.FC = () => {
               </Text>
             </TouchableOpacity>
           </Animated.View>
-        </Animated.View>
+        </View>
       </Modal>
 
       <Toast
