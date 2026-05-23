@@ -878,6 +878,11 @@ const localizedTexts: Record<Language, Record<string, string>> = {
     "security.scanQRCode": "Scanner le code QR",
     "security.qrScannerComingSoon":
       "Le scanner QR sera disponible prochainement",
+    "security.qrInstructions": "Scannez ce code avec l'appareil à connecter",
+    "security.qrExpiresIn": "Expire dans",
+    "security.qrRefresh": "Actualiser",
+    "security.qrExpired": "QR code expiré",
+    "security.qrGenerateError": "Impossible de générer le QR code",
     "security.createdOn": "Créé le",
     "security.infoMessage":
       "Ces clés permettent de vérifier l'identité de vos appareils et de sécuriser vos conversations.",
@@ -1224,6 +1229,12 @@ const localizedTexts: Record<Language, Record<string, string>> = {
     "security.codeCopied": "Code copied to clipboard",
     "security.scanQRCode": "Scan QR Code",
     "security.qrScannerComingSoon": "QR scanner will be available soon",
+    "security.qrInstructions":
+      "Scan this code with the device you want to connect",
+    "security.qrExpiresIn": "Expires in",
+    "security.qrRefresh": "Refresh",
+    "security.qrExpired": "QR code expired",
+    "security.qrGenerateError": "Unable to generate QR code",
     "security.createdOn": "Created on",
     "security.infoMessage":
       "These keys allow you to verify your devices' identity and secure your conversations.",
